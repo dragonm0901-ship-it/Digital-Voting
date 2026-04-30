@@ -1,0 +1,37 @@
+{
+  "1": {
+    "name": "Koshi",
+    "path": "",
+    "districtCount": 13
+  },
+  "2": {
+    "name": "Madhesh",
+    "path": "",
+    "districtCount": 7
+  },
+  "3": {
+    "name": "Bagmati",
+    "path": "",
+    "districtCount": 13
+  },
+  "4": {
+    "name": "Gandaki",
+    "path": "",
+    "districtCount": 11
+  },
+  "5": {
+    "name": "Lumbini",
+    "path": "",
+    "districtCount": 10
+  },
+  "6": {
+    "name": "Karnali",
+    "path": "",
+    "districtCount": 10
+  },
+  "7": {
+    "name": "Sudurpashchim",
+    "path": "",
+    "districtCount": 9
+  }
+}

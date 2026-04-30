@@ -1,0 +1,224 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// MATDAAN — National Digital Voting Platform Database Schema
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// This schema covers:
+//   1. Voter Registry (identity + eligibility)
+//   2. Elections & Candidates (configuration)
+//   3. Vote Records (encrypted + nullifier-based dedup)
+//   4. OTP Sessions (authentication)
+//   5. Audit Log (tamper-evident trail)
+//   6. Admin Users (RBAC)
+//
+// Database: SQLite for development. Swap to PostgreSQL for production by
+// changing the provider to "postgresql" and updating the DATABASE_URL.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── 1. Voter Registry ──────────────────────────────────────────────────────
+
+model Voter {
+  id              String   @id @default(cuid())
+  voterId         String   @unique // 10-digit National Voter ID
+  fullName        String // Full legal name
+  citizenshipNo   String   @unique // National citizenship number
+  dateOfBirth     DateTime // For age verification (18+)
+  province        Int // Province number (1-7)
+  district        String // District name
+  municipality    String // Local government unit
+  ward            Int // Ward number
+  registeredPhone String // Registered mobile for OTP
+  biometricHash   String? // SHA-256 hash of biometric data
+  photoUrl        String? // Passport photo URL
+  isActive        Boolean  @default(true) // Can be deactivated by admin
+  hasVoted        Boolean  @default(false) // Tracks if voted in current election
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  otpSessions OtpSession[]
+  voteRecords VoteRecord[]
+
+  @@index([province, district])
+  @@index([hasVoted])
+}
+
+// ─── 2. Elections ───────────────────────────────────────────────────────────
+
+model Election {
+  id            String   @id @default(cuid())
+  electionId    String   @unique // e.g., "GE-2025-001"
+  title         String // "General Election 2025"
+  titleNe       String? // Nepali title
+  type          String // "general" | "local" | "provincial"
+  status        String   @default("draft") // "draft" | "active" | "paused" | "completed" | "certified"
+  startDate     DateTime // Voting start datetime
+  endDate       DateTime // Voting end datetime
+  totalEligible Int      @default(0) // Total eligible voters
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  candidates  Candidate[]
+  voteRecords VoteRecord[]
+  auditLogs   AuditLog[]
+
+  @@index([status])
+}
+
+model Candidate {
+  id            String   @id @default(cuid())
+  electionId    String // FK to Election
+  partyId       String // Party identifier (matches frontend constants)
+  partyNameEn   String // English party name
+  partyNameNe   String? // Nepali party name
+  candidateName String? // Individual candidate name (for direct)
+  symbol        String // Election symbol identifier
+  ballotType    String // "direct" | "proportional"
+  province      Int? // Province-specific candidates (null = national)
+  district      String? // District-specific
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  // Relations
+  election Election @relation(fields: [electionId], references: [id])
+
+  @@index([electionId, ballotType])
+  @@index([electionId, province])
+}
+
+// ─── 3. Vote Records ────────────────────────────────────────────────────────
+
+model VoteRecord {
+  id              String    @id @default(cuid())
+  electionId      String // FK to Election
+  voterId         String // FK to Voter (for hasVoted tracking)
+  nullifier       String    @unique // HMAC-SHA256 — prevents double voting
+  zkProofHash     String // SHA-256 hash of the ZK proof
+  encryptedBallot String // AES-256 encrypted vote data
+  ballotType      String // "direct" | "proportional"
+  merkleLeafHash  String? // Hash of this vote in the Merkle tree
+  merkleRoot      String? // Root of the batch it was committed to
+  blockNumber     Int? // Ledger block number
+  province        Int // Province for regional tallying
+  status          String    @default("queued") // "queued" | "batched" | "committed" | "verified"
+  castAt          DateTime  @default(now())
+  committedAt     DateTime? // When batch was committed to ledger
+
+  // Relations
+  election Election @relation(fields: [electionId], references: [id])
+  voter    Voter    @relation(fields: [voterId], references: [id])
+
+  @@index([electionId, status])
+  @@index([electionId, province])
+  @@index([blockNumber])
+  @@index([voterId])
+}
+
+// ─── 4. OTP Sessions ────────────────────────────────────────────────────────
+
+model OtpSession {
+  id          String   @id @default(cuid())
+  voterId     String // FK to Voter
+  otpHash     String // SHA-256 hash of the OTP (never store plaintext)
+  expiresAt   DateTime // OTP expiry (5 minutes from creation)
+  attempts    Int      @default(0) // Failed verification attempts
+  maxAttempts Int      @default(5) // Max allowed attempts
+  isUsed      Boolean  @default(false) // Consumed after successful verification
+  ipAddress   String? // Client IP for audit
+  userAgent   String? // Client user agent
+  createdAt   DateTime @default(now())
+
+  // Relations
+  voter Voter @relation(fields: [voterId], references: [id])
+
+  @@index([voterId, isUsed])
+  @@index([expiresAt])
+}
+
+// ─── 5. Audit Log ───────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  electionId String? // FK to Election (null for system events)
+  action     String // e.g., "VOTER_VERIFIED", "VOTE_CAST", "BLOCK_COMMITTED"
+  category   String // "auth" | "vote" | "admin" | "system" | "security"
+  severity   String   @default("info") // "info" | "warning" | "critical"
+  actorType  String // "voter" | "admin" | "system"
+  actorId    String? // Voter ID / Admin ID / "SYSTEM"
+  details    String? // JSON string with additional context
+  ipAddress  String? // Client IP
+  requestId  String? // Correlates with proxy request ID
+  timestamp  DateTime @default(now())
+
+  // Relations
+  election Election? @relation(fields: [electionId], references: [id])
+
+  @@index([electionId, category])
+  @@index([action])
+  @@index([timestamp])
+  @@index([actorId])
+}
+
+// ─── 6. Admin Users ─────────────────────────────────────────────────────────
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  username     String    @unique // Login username
+  passwordHash String // bcrypt hash of password
+  fullName     String // Display name
+  role         String    @default("observer") // "superadmin" | "commissioner" | "returning_officer" | "observer"
+  province     Int? // Province restriction (null = national)
+  district     String? // District restriction
+  isActive     Boolean   @default(true)
+  lastLogin    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([role])
+}
+
+// ─── 7. Ledger Blocks (Committed Merkle Batches) ────────────────────────────
+
+model LedgerBlock {
+  id            String   @id @default(cuid())
+  blockNumber   Int      @unique // Sequential block number
+  merkleRoot    String   @unique // Root hash of the Merkle tree
+  voteCount     Int // Number of votes in this batch
+  validatorNode String // Node that validated this block
+  previousHash  String? // Hash of previous block (chain integrity)
+  blockHash     String   @unique // SHA-256 hash of this block's contents
+  province      Int? // Province-specific block (null = mixed)
+  committedAt   DateTime @default(now())
+
+  @@index([committedAt])
+}
+
+// ─── 8. Grievance Reports ───────────────────────────────────────────────────
+
+model Grievance {
+  id              String   @id @default(cuid())
+  ticketId        String   @unique // e.g., "ECN-GRV-12345"
+  reporterName    String
+  reporterVoterId String? // Optional Voter ID
+  category        String // "technical" | "accessibility" | "integrity" | "intimidation" | "other"
+  description     String
+  status          String   @default("submitted") // "submitted" | "under_review" | "resolved" | "escalated"
+  assignedTo      String? // Admin user ID
+  resolution      String? // Resolution notes
+  ipAddress       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status])
+  @@index([category])
+}
