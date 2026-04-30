@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+_prototype_backup/
 
 # debug
 npm-debug.log*
@@ -40,4 +41,13 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# database
+*.db
+*.db-journal
+
+# prisma
 /src/generated/prisma
+
+# agents
+CLAUDE.md
+AGENTS.md
