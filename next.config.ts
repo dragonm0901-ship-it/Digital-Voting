@@ -106,13 +106,6 @@ const nextConfig: NextConfig = {
 
   // Powered-by header is handled above with custom value
   poweredByHeader: false,
-
-  // Enable experimental SRI for hash-based CSP integrity
-  experimental: {
-    sri: {
-      algorithm: 'sha256',
-    },
-  },
 };
 
 export default nextConfig;
