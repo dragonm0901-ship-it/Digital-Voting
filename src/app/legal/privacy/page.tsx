@@ -89,7 +89,7 @@ export default function PrivacyPolicy() {
                 <h2 className="text-2xl font-bold">Constitutional Guarantee</h2>
               </div>
               <p className="text-blue-100 mb-8 max-w-2xl leading-relaxed">
-                "The secrecy of the ballot is a fundamental right guaranteed by Article 32 of the Constitution of Nepal. Any attempt to breach this secrecy, whether through technical exploitation or administrative overreach, constitutes a high crime against the state."
+                &ldquo;The secrecy of the ballot is a fundamental right guaranteed by Article 32 of the Constitution of Nepal. Any attempt to breach this secrecy, whether through technical exploitation or administrative overreach, constitutes a high crime against the state.&rdquo;
               </p>
               <div className="flex flex-wrap gap-4">
                 <button className="bg-white text-navy px-6 py-3 font-bold text-sm rounded-md hover:bg-blue-50 transition-colors flex items-center gap-2">

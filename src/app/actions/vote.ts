@@ -50,6 +50,17 @@ export async function castVoteAction(partyId: string, voterId: string): Promise<
 
     const zkProofString = btoa(JSON.stringify(zkProofPayload));
 
+    // Envelope the selected party selections in JSON format to support tallying
+    const partyParts = partyId.split('-');
+    const selectedDirect = partyParts[0] || 'p1';
+    const selectedPR = partyParts[1] || 'p1';
+
+    const ballotEnvelope = JSON.stringify({
+      zkProof: zkProofString,
+      selectedDirect,
+      selectedPR
+    });
+
     // 5. Store in Prisma (Simulating Kafka Queue DROP)
     const voteRecord = await db.voteRecord.create({
       data: {
@@ -57,7 +68,7 @@ export async function castVoteAction(partyId: string, voterId: string): Promise<
         voterId: voter.id, // Used locally to flag. Real system might decouple this aggressively.
         nullifier,
         zkProofHash: zkProofPayload.publicSignals[2], // Placeholder encrypted hash
-        encryptedBallot: zkProofString, // Placeholder content
+        encryptedBallot: ballotEnvelope, // Store JSON envelope
         ballotType: 'proportional',
         province: voter.province,
         status: 'queued',
@@ -143,5 +154,53 @@ export async function verifyReceiptAction(receipt: VoteReceipt): Promise<boolean
   } catch (error) {
     console.error('Receipt verify error:', error);
     return false;
+  }
+}
+
+export async function getLiveResultsAction(): Promise<ApiResponse<{
+  totalLiveVotes: number;
+  partyPRVotes: Record<string, number>;
+  partyDirectVotes: Record<string, number>;
+  provinceVotes: Record<number, number>;
+}>> {
+  try {
+    const votes = await db.voteRecord.findMany({
+      where: { status: 'committed' }
+    });
+
+    const partyPRVotes: Record<string, number> = {};
+    const partyDirectVotes: Record<string, number> = {};
+    const provinceVotes: Record<number, number> = {};
+
+    let totalLiveVotes = 0;
+
+    for (const vote of votes) {
+      try {
+        const envelope = JSON.parse(vote.encryptedBallot);
+        if (envelope.selectedPR && envelope.selectedDirect) {
+          totalLiveVotes++;
+          
+          partyPRVotes[envelope.selectedPR] = (partyPRVotes[envelope.selectedPR] || 0) + 1;
+          partyDirectVotes[envelope.selectedDirect] = (partyDirectVotes[envelope.selectedDirect] || 0) + 1;
+          
+          provinceVotes[vote.province] = (provinceVotes[vote.province] || 0) + 1;
+        }
+      } catch (e) {
+        // Fallback for non-enveloped records if any
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        totalLiveVotes,
+        partyPRVotes,
+        partyDirectVotes,
+        provinceVotes,
+      }
+    };
+  } catch (error) {
+    console.error('getLiveResultsAction error:', error);
+    return { success: false, error: 'system_error' };
   }
 }

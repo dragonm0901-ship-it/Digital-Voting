@@ -15,15 +15,16 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
+import { checkRateLimit } from './lib/rate-limit';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'matdaan_development_secret_key_change_in_production'
-);
+if (!process.env.JWT_SECRET) {
+  throw new Error("CRITICAL SECURITY ERROR: JWT_SECRET environment variable is missing!");
+}
 
-// ─── Rate Limiting (In-Memory for PoC — use Redis in production) ────────────
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute window
+// ─── Rate Limit Configurations ──────────────────────────────────────────────
+const RATE_LIMIT_WINDOW_SECONDS = 60; // 1 minute window
 const RATE_LIMITS = {
   '/api/auth/verify-otp': 5,    // 5 OTP attempts per minute (prevents brute-force)
   '/api/auth/verify-voter': 10, // 10 voter lookups per minute
@@ -36,36 +37,6 @@ function getRateLimit(pathname: string): number {
     if (path !== 'default' && pathname.startsWith(path)) return limit;
   }
   return RATE_LIMITS.default;
-}
-
-function checkRateLimit(ip: string, pathname: string): { allowed: boolean; remaining: number } {
-  const key = `${ip}:${pathname}`;
-  const now = Date.now();
-  const limit = getRateLimit(pathname);
-
-  const entry = rateLimitMap.get(key);
-
-  if (!entry || now > entry.resetTime) {
-    rateLimitMap.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-    return { allowed: true, remaining: limit - 1 };
-  }
-
-  if (entry.count >= limit) {
-    return { allowed: false, remaining: 0 };
-  }
-
-  entry.count++;
-  return { allowed: true, remaining: limit - entry.count };
-}
-
-// Periodic cleanup of expired entries (prevent memory leak)
-if (typeof setInterval !== 'undefined') {
-  setInterval(() => {
-    const now = Date.now();
-    for (const [key, entry] of rateLimitMap.entries()) {
-      if (now > entry.resetTime) rateLimitMap.delete(key);
-    }
-  }, RATE_LIMIT_WINDOW_MS);
 }
 
 
@@ -85,10 +56,11 @@ export async function proxy(request: NextRequest) {
       || request.headers.get('x-real-ip')
       || 'unknown';
 
-    const { allowed, remaining } = checkRateLimit(ip, pathname);
+    const limit = getRateLimit(pathname);
+    const { allowed, remaining } = await checkRateLimit(ip, pathname, limit, RATE_LIMIT_WINDOW_SECONDS);
 
     response.headers.set('X-RateLimit-Remaining', String(remaining));
-    response.headers.set('X-RateLimit-Limit', String(getRateLimit(pathname)));
+    response.headers.set('X-RateLimit-Limit', String(limit));
 
     if (!allowed) {
       return NextResponse.json(
@@ -100,7 +72,7 @@ export async function proxy(request: NextRequest) {
         {
           status: 429,
           headers: {
-            'Retry-After': '60',
+            'Retry-After': String(RATE_LIMIT_WINDOW_SECONDS),
             'X-Request-Id': requestId,
             'X-RateLimit-Remaining': '0',
           },

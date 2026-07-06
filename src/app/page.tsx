@@ -248,10 +248,10 @@ export default function LandingPage() {
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
-                { icon: (props: any) => <FingerprintIcon {...props} />, titleKey: 'step1Title' as const, descKey: 'step1Desc' as const, num: '01' },
-                { icon: (props: any) => <Smartphone {...props} />, titleKey: 'step2Title' as const, descKey: 'step2Desc' as const, num: '02' },
-                { icon: (props: any) => <BallotBoxIcon {...props} />, titleKey: 'step3Title' as const, descKey: 'step3Desc' as const, num: '03' },
-                { icon: (props: any) => <EncryptedLockIcon {...props} />, titleKey: 'step4Title' as const, descKey: 'step4Desc' as const, num: '04' },
+                { icon: (props: { size?: number; className?: string; color?: string }) => <FingerprintIcon {...props} />, titleKey: 'step1Title' as const, descKey: 'step1Desc' as const, num: '01' },
+                { icon: (props: { size?: number; className?: string; color?: string }) => <Smartphone {...props} />, titleKey: 'step2Title' as const, descKey: 'step2Desc' as const, num: '02' },
+                { icon: (props: { size?: number; className?: string; color?: string }) => <BallotBoxIcon {...props} />, titleKey: 'step3Title' as const, descKey: 'step3Desc' as const, num: '03' },
+                { icon: (props: { size?: number; className?: string; color?: string }) => <EncryptedLockIcon {...props} />, titleKey: 'step4Title' as const, descKey: 'step4Desc' as const, num: '04' },
               ].map((step, i) => (
                 <motion.div
                   key={i}

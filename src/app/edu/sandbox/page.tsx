@@ -42,6 +42,7 @@ export default function VoterEducationSandbox() {
   const [voterIdVisible, setVoterIdVisible] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [progress, setProgress] = useState(0);
+  const [mockReceipt, setMockReceipt] = useState<{ txHash: string; timestamp: string } | null>(null);
 
   // Simulation controls
   const runEnvCheck = () => {
@@ -80,6 +81,10 @@ export default function VoterEducationSandbox() {
       setProgress(p => {
         if (p >= 100) {
           clearInterval(interval);
+          setMockReceipt({
+            txHash: `0x${Math.random().toString(16).slice(2, 18)}...`,
+            timestamp: new Date().toISOString(),
+          });
           setTimeout(() => setStep('success'), 800);
           return 100;
         }
@@ -94,6 +99,7 @@ export default function VoterEducationSandbox() {
     setSelectionPR(null);
     setVoterId('');
     setOtp(['', '', '', '', '', '']);
+    setMockReceipt(null);
   };
 
   return (
@@ -448,7 +454,7 @@ export default function VoterEducationSandbox() {
                   <div className="space-y-3 font-mono text-[11px]">
                     <div className="flex justify-between">
                       <span className="text-text-muted">TX_HASH</span>
-                      <span className="font-bold text-navy">0x{Math.random().toString(16).slice(2, 18)}...</span>
+                      <span className="font-bold text-navy">{mockReceipt?.txHash || '0x...'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-text-muted">PROVINCE</span>
@@ -456,7 +462,7 @@ export default function VoterEducationSandbox() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-text-muted">TIMESTAMP</span>
-                      <span className="font-bold">{new Date().toISOString()}</span>
+                      <span className="font-bold">{mockReceipt?.timestamp || '...'}</span>
                     </div>
                   </div>
                 </div>

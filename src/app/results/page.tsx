@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -12,53 +12,86 @@ import { t } from '@/lib/i18n';
 import { PROVINCES, PARTY_RESULTS, PARTIES } from '@/lib/constants';
 import { ElectionSymbol } from '@/components/icons/CustomIcons';
 import NepalElectionMap from '@/components/results/NepalElectionMap';
-import { ShieldCheck, Users, Activity, History, ArrowRight, TrendingUp, List, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShieldCheck, Users, Activity, History, ArrowRight, TrendingUp, List, ChevronDown, ChevronUp, Radio } from 'lucide-react';
 import { toLocaleNumber } from '@/lib/numbers';
 import { PoliticalParty } from '@/types';
+import { getLiveResultsAction } from '@/app/actions/vote';
 
 export default function ResultsPage() {
   const { language } = useVotingStore();
   const [showDetailed, setShowDetailed] = useState(false);
-  
+  const [liveData, setLiveData] = useState<{
+    totalLiveVotes: number;
+    partyPRVotes: Record<string, number>;
+    partyDirectVotes: Record<string, number>;
+    provinceVotes: Record<number, number>;
+  } | null>(null);
+
   const tr = (key: Parameters<typeof t>[1]) => t(language, key);
   const n = (val: string | number) => toLocaleNumber(val, language);
 
+  useEffect(() => {
+    async function loadLiveResults() {
+      const res = await getLiveResultsAction();
+      if (res.success && res.data) {
+        setLiveData(res.data);
+      }
+    }
+    loadLiveResults();
+  }, []);
+
+  // 12.8M baseline votes total (proportional representation baseline)
+  const BASELINE_TOTAL_VOTES = 12800000;
+
+  // Calculate dynamic results merging database votes with baseline votes
+  const dynamicPartyResults = useMemo(() => {
+    const totalLiveVotes = liveData?.totalLiveVotes || 0;
+    const combinedTotalVotes = BASELINE_TOTAL_VOTES + totalLiveVotes;
+
+    return PARTY_RESULTS.map(p => {
+      // Baseline vote count for this party
+      const baselineVotes = BASELINE_TOTAL_VOTES * (p.percentage / 100);
+      // Live vote count for this party
+      const liveVotes = liveData?.partyPRVotes[p.partyId] || 0;
+      
+      const newPercentage = ((baselineVotes + liveVotes) / combinedTotalVotes) * 100;
+      
+      return {
+        ...p,
+        percentage: Number(newPercentage.toFixed(4)) // Keep high precision
+      };
+    }).sort((a, b) => b.percentage - a.percentage); // Maintain sorted standings
+  }, [liveData]);
+
   // ── Data Aggregation ──
-  const aggregatedData = useMemo(() => {
-    const threshold = 3;
-    const leaders = PARTY_RESULTS.filter(p => p.percentage >= threshold);
-    const others = PARTY_RESULTS.filter(p => p.percentage < threshold);
-    
-    if (others.length === 0) return PARTY_RESULTS.map(p => ({
-      name: language === 'ne' ? p.nameNe : p.nameEn,
-      value: p.percentage,
-      color: p.color
-    }));
+  const threshold = 3;
+  const leaders = dynamicPartyResults.filter(p => p.percentage >= threshold);
+  const others = dynamicPartyResults.filter(p => p.percentage < threshold);
 
-    const othersTotal = others.reduce((acc, p) => acc + p.percentage, 0);
-    
-    const data = leaders.map(p => ({
-      name: language === 'ne' ? p.nameNe : p.nameEn,
-      value: p.percentage,
-      color: p.color
-    }));
+  const aggregatedData = others.length === 0
+    ? dynamicPartyResults.map(p => ({
+        name: language === 'ne' ? p.nameNe : p.nameEn,
+        value: p.percentage,
+        color: p.color
+      }))
+    : [
+        ...leaders.map(p => ({
+          name: language === 'ne' ? p.nameNe : p.nameEn,
+          value: p.percentage,
+          color: p.color
+        })),
+        {
+          name: t(language, 'others'),
+          value: others.reduce((acc, p) => acc + p.percentage, 0),
+          color: '#A0AEC0'
+        }
+      ];
 
-    data.push({
-      name: tr('others'),
-      value: othersTotal,
-      color: '#A0AEC0'
-    });
-
-    return data;
-  }, [language]);
-
-  const topLeaders = useMemo(() => {
-    return PARTY_RESULTS.slice(0, 5).map(p => ({
-      name: language === 'ne' ? p.nameNe : p.nameEn,
-      value: p.percentage,
-      color: p.color
-    }));
-  }, [language]);
+  const topLeaders = dynamicPartyResults.slice(0, 5).map(p => ({
+    name: language === 'ne' ? p.nameNe : p.nameEn,
+    value: p.percentage,
+    color: p.color
+  }));
 
   return (
     <motion.div
@@ -70,10 +103,18 @@ export default function ResultsPage() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-4 md:px-0">
         <div className="text-center md:text-left">
           <h2 className="text-2xl sm:text-3xl font-bold text-text-primary mb-2">{tr('resultsTitle')}</h2>
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-success rounded-md text-white border-none transition-transform active:scale-95 duration-100">
-            <span className="text-xs font-bold uppercase tracking-wider text-white">
-              {tr('secureNetwork')}
-            </span>
+          <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-success rounded-md text-white border-none transition-transform active:scale-95 duration-100">
+              <span className="text-xs font-bold uppercase tracking-wider text-white">
+                {tr('secureNetwork')}
+              </span>
+            </div>
+            {liveData && liveData.totalLiveVotes > 0 && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-crimson-light border border-crimson/20 rounded-md text-crimson animate-pulse text-xs font-bold uppercase tracking-wider">
+                <Radio size={12} className="text-crimson shrink-0" />
+                Live Database Feed Active ({liveData.totalLiveVotes} votes)
+              </div>
+            )}
           </div>
         </div>
         <div className="flex flex-row md:flex-row gap-4 justify-center md:justify-end">
@@ -195,7 +236,7 @@ export default function ResultsPage() {
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(val: any) => n(val ?? 0) + '%'} />
+                <Tooltip formatter={(val) => n(val as string | number) + '%'} />
                 <Legend 
                   layout="horizontal" 
                   verticalAlign="bottom" 
@@ -241,7 +282,7 @@ export default function ResultsPage() {
             >
               <div className="p-4 sm:p-5 max-h-[500px] overflow-y-auto">
                 <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                  {PARTY_RESULTS.map((p, i) => (
+                  {dynamicPartyResults.map((p) => (
                     <div key={p.partyId} className="active-scale flex flex-col sm:flex-row items-center sm:items-center gap-2 sm:gap-3 p-3 border border-border rounded hover:border-border-strong transition-colors bg-white">
                       <div className="w-8 h-8 flex items-center justify-center bg-surface rounded shrink-0">
                         <ElectionSymbol symbol={PARTIES.find((p2: PoliticalParty) => p2.id === p.partyId)?.symbol || 'generic'} size={16} />

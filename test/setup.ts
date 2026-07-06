@@ -15,3 +15,7 @@ if (!globalThis.crypto || !globalThis.crypto.subtle) {
     value: crypto.webcrypto,
   });
 }
+
+// Default environment variables for database and JWT secrets under Jest test environment
+process.env.DATABASE_URL = process.env.DATABASE_URL || "file:./dev.db";
+process.env.JWT_SECRET = process.env.JWT_SECRET || "matdaan_development_secret_key_change_in_production";

@@ -16,15 +16,34 @@ import {
   Hash
 } from 'lucide-react';
 
+function generateBlock(index: number) {
+  return {
+    id: 842000 + index,
+    timestamp: new Date().toLocaleTimeString(),
+    merkleRoot: `0x${Math.random().toString(16).slice(2, 10)}...${Math.random().toString(16).slice(2, 6)}`,
+    votes: Math.floor(Math.random() * 500) + 100,
+    validator: `Node-${Math.floor(Math.random() * 7) + 1}`,
+    hash: `0x${Math.random().toString(16).slice(2, 40)}`
+  };
+}
+
+interface MockBlock {
+  id: number;
+  timestamp: string;
+  merkleRoot: string;
+  votes: number;
+  validator: string;
+  hash: string;
+}
+
 export default function ObserverPortal() {
-  const [blocks, setBlocks] = useState<any[]>([]);
+  const [blocks, setBlocks] = useState<MockBlock[]>(() =>
+    Array.from({ length: 5 }, (_, i) => generateBlock(i))
+  );
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Generate mock real-time block stream
   useEffect(() => {
-    const initialBlocks = Array.from({ length: 5 }, (_, i) => generateBlock(i));
-    setBlocks(initialBlocks);
-
     const interval = setInterval(() => {
       setBlocks(prev => [generateBlock(prev.length), ...prev.slice(0, 4)]);
       setIsSyncing(true);
@@ -33,17 +52,6 @@ export default function ObserverPortal() {
 
     return () => clearInterval(interval);
   }, []);
-
-  function generateBlock(index: number) {
-    return {
-      id: 842000 + index,
-      timestamp: new Date().toLocaleTimeString(),
-      merkleRoot: `0x${Math.random().toString(16).slice(2, 10)}...${Math.random().toString(16).slice(2, 6)}`,
-      votes: Math.floor(Math.random() * 500) + 100,
-      validator: `Node-${Math.floor(Math.random() * 7) + 1}`,
-      hash: `0x${Math.random().toString(16).slice(2, 40)}`
-    };
-  }
 
   return (
     <div className="min-h-screen flex flex-col bg-surface">
@@ -101,7 +109,7 @@ export default function ObserverPortal() {
 
             <div className="bg-amber-50 border border-amber-200 p-6 rounded-md">
               <h3 className="text-amber-800 font-bold text-xs uppercase mb-2 flex items-center gap-2">
-                <Search size={14} /> Auditor's Note
+                <Search size={14} /> Auditor&apos;s Note
               </h3>
               <p className="text-xs text-amber-700 leading-relaxed">
                 All blocks visualised here represent <b>aggregated Merkle trees</b>. Individual vote choices are permanently hidden via Zero-Knowledge Proofs (ZKP), ensuring total voter privacy while allowing public verification of the total count.

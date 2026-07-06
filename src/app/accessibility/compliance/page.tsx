@@ -54,7 +54,7 @@ export default function AccessibilityPage() {
                 <ul className="text-xs text-text-secondary space-y-2 list-disc pl-4">
                   <li>Full keyboard operability for all interactive elements</li>
                   <li>Visible focus indicators for all buttons and links</li>
-                  <li>"Skip to Main Content" bypass links on every page</li>
+                  <li>&ldquo;Skip to Main Content&rdquo; bypass links on every page</li>
                 </ul>
               </div>
 
@@ -74,7 +74,7 @@ export default function AccessibilityPage() {
                 <ul className="text-xs text-text-secondary space-y-2 list-disc pl-4">
                   <li>Semantic HTML5 structure and ARIA landmarks</li>
                   <li>Descriptive alt text for all symbols and icons</li>
-                  <li>Live regions for dynamic status updates (e.g. "Casting Vote")</li>
+                  <li>Live regions for dynamic status updates (e.g. &ldquo;Casting Vote&rdquo;)</li>
                 </ul>
               </div>
             </div>
